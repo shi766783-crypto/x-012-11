@@ -1,5 +1,6 @@
 <script setup>
 import { formatDate } from '../utils/date'
+import { getPhotoSrc } from '../utils/photo'
 
 defineProps({
   plants: {
@@ -17,7 +18,7 @@ defineProps({
     </div>
     <div class="plant-grid">
       <article v-for="plant in plants" :key="plant.id" class="plant-card">
-        <img v-if="plant.photo" :src="plant.photo" :alt="plant.name" />
+        <img v-if="plant.photo" :src="getPhotoSrc(plant.photo)" :alt="plant.name" />
         <div v-else class="plant-placeholder">{{ plant.name.slice(0, 1) }}</div>
         <div class="plant-card-body">
           <div class="plant-title">

@@ -1,11 +1,18 @@
 <script setup>
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { BLOOM_STATES, CARE_TYPES } from '../constants/garden'
 import { todayISO } from '../utils/date'
+import { formatBytes } from '../utils/format'
+import { getPhotoSrc } from '../utils/photo'
+import { ImageCompressError, compressImageFile } from '../utils/image'
 
 const props = defineProps({
   plants: {
     type: Array,
+    required: true,
+  },
+  canAttachPhoto: {
+    type: Function,
     required: true,
   },
 })
@@ -16,8 +23,18 @@ const care = reactive({ plantId: '', date: todayISO(), type: '浇水', amount: '
 const growth = reactive({ plantId: '', date: todayISO(), height: 0, leafCount: 0, bloomState: '未开花' })
 const pest = reactive({ plantId: '', date: todayISO(), symptom: '', treatment: '', recovery: '' })
 
+const photoError = ref('')
+const photoInfo = ref('')
+const photoProcessing = ref(false)
+
 function ensurePlantId(form) {
   if (!form.plantId) form.plantId = firstPlantId.value
+}
+
+function resetPhotoField() {
+  care.photo = ''
+  photoError.value = ''
+  photoInfo.value = ''
 }
 
 function submitCare() {
@@ -26,7 +43,7 @@ function submitCare() {
   emit('care', { ...care })
   care.amount = ''
   care.note = ''
-  care.photo = ''
+  resetPhotoField()
 }
 
 function submitGrowth() {
@@ -46,14 +63,39 @@ function submitPest() {
   pest.recovery = ''
 }
 
-function handlePhoto(event) {
-  const file = event.target.files?.[0]
+async function handlePhoto(event) {
+  const input = event.target
+  const file = input.files?.[0]
+  input.value = ''
   if (!file) return
-  const reader = new FileReader()
-  reader.onload = () => {
-    care.photo = reader.result
+
+  photoError.value = ''
+  photoInfo.value = ''
+  photoProcessing.value = true
+  try {
+    const result = await compressImageFile(file)
+    if (!props.canAttachPhoto(result.bytes)) {
+      resetPhotoField()
+      photoError.value = '剩余空间不足，这张照片无法保存。请先在“本地存储管理”中清理或压缩旧照片。'
+      return
+    }
+    care.photo = {
+      src: result.src,
+      width: result.width,
+      height: result.height,
+      bytes: result.bytes,
+      compressed: result.compressed,
+    }
+    photoInfo.value = result.compressed
+      ? `已压缩至 ${result.width}×${result.height}，约 ${formatBytes(result.bytes)}`
+      : `照片体积较小，保留原图（约 ${formatBytes(result.bytes)}）`
+  } catch (error) {
+    resetPhotoField()
+    photoError.value =
+      error instanceof ImageCompressError ? error.message : '照片处理失败，请换一张试试。'
+  } finally {
+    photoProcessing.value = false
   }
-  reader.readAsDataURL(file)
 }
 </script>
 
@@ -73,7 +115,16 @@ function handlePhoto(event) {
       </select>
       <input v-model="care.amount" placeholder="用量或备注" />
       <textarea v-model="care.note" rows="3" placeholder="养护细节"></textarea>
-      <input accept="image/*" type="file" @change="handlePhoto" />
+      <input accept="image/*" :disabled="photoProcessing" type="file" @change="handlePhoto" />
+      <p v-if="photoProcessing" class="photo-hint">正在压缩照片…</p>
+      <div v-if="care.photo" class="photo-preview compact">
+        <img :src="getPhotoSrc(care.photo)" alt="养护照片预览" />
+        <div class="photo-preview-meta">
+          <span>{{ photoInfo }}</span>
+          <button class="text-action" type="button" @click="resetPhotoField">移除照片</button>
+        </div>
+      </div>
+      <p v-if="photoError" class="photo-error">{{ photoError }}</p>
       <button class="secondary-action" type="submit">记录养护</button>
     </form>
 

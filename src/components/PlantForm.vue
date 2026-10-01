@@ -1,8 +1,17 @@
 <script setup>
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import { LIGHT_NEEDS, LOCATIONS, PLANT_CATEGORIES } from '../constants/garden'
 import { todayISO } from '../utils/date'
+import { formatBytes } from '../utils/format'
+import { getPhotoSrc } from '../utils/photo'
+import { ImageCompressError, compressImageFile } from '../utils/image'
 
+const props = defineProps({
+  canAttachPhoto: {
+    type: Function,
+    required: true,
+  },
+})
 const emit = defineEmits(['submit'])
 
 const form = reactive({
@@ -20,6 +29,16 @@ const form = reactive({
   photo: '',
 })
 
+const photoError = ref('')
+const photoInfo = ref('')
+const photoProcessing = ref(false)
+
+function resetPhotoField() {
+  form.photo = ''
+  photoError.value = ''
+  photoInfo.value = ''
+}
+
 function submit() {
   if (!form.name.trim()) return
   emit('submit', { ...form, name: form.name.trim() })
@@ -27,17 +46,43 @@ function submit() {
   form.variety = ''
   form.potSize = ''
   form.soilType = ''
-  form.photo = ''
+  resetPhotoField()
 }
 
-function handlePhoto(event) {
-  const file = event.target.files?.[0]
+async function handlePhoto(event) {
+  const input = event.target
+  const file = input.files?.[0]
+  // 允许重新选择同名文件
+  input.value = ''
   if (!file) return
-  const reader = new FileReader()
-  reader.onload = () => {
-    form.photo = reader.result
+
+  photoError.value = ''
+  photoInfo.value = ''
+  photoProcessing.value = true
+  try {
+    const result = await compressImageFile(file)
+    if (!props.canAttachPhoto(result.bytes)) {
+      resetPhotoField()
+      photoError.value = '剩余空间不足，这张照片无法保存。请先在“本地存储管理”中清理或压缩旧照片。'
+      return
+    }
+    form.photo = {
+      src: result.src,
+      width: result.width,
+      height: result.height,
+      bytes: result.bytes,
+      compressed: result.compressed,
+    }
+    photoInfo.value = result.compressed
+      ? `已压缩至 ${result.width}×${result.height}，约 ${formatBytes(result.bytes)}`
+      : `照片体积较小，保留原图（约 ${formatBytes(result.bytes)}）`
+  } catch (error) {
+    resetPhotoField()
+    photoError.value =
+      error instanceof ImageCompressError ? error.message : '照片处理失败，请换一张试试。'
+  } finally {
+    photoProcessing.value = false
   }
-  reader.readAsDataURL(file)
 }
 </script>
 
@@ -45,7 +90,7 @@ function handlePhoto(event) {
   <form class="panel form-grid" @submit.prevent="submit">
     <div class="panel-heading">
       <h2>添加植物档案</h2>
-      <span>localStorage 保存</span>
+      <span>照片自动压缩 · 本地保存</span>
     </div>
 
     <label>
@@ -100,8 +145,17 @@ function handlePhoto(event) {
     </label>
     <label>
       植物照片
-      <input accept="image/*" type="file" @change="handlePhoto" />
+      <input accept="image/*" :disabled="photoProcessing" type="file" @change="handlePhoto" />
     </label>
+    <p v-if="photoProcessing" class="photo-hint">正在压缩照片…</p>
+    <div v-if="form.photo" class="photo-preview">
+      <img :src="getPhotoSrc(form.photo)" alt="植物照片预览" />
+      <div class="photo-preview-meta">
+        <span>{{ photoInfo }}</span>
+        <button class="text-action" type="button" @click="resetPhotoField">移除照片</button>
+      </div>
+    </div>
+    <p v-if="photoError" class="photo-error">{{ photoError }}</p>
     <button class="primary-action" type="submit">添加植物</button>
   </form>
 </template>

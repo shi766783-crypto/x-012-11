@@ -1,6 +1,7 @@
 <script setup>
 import GrowthCanvas from './GrowthCanvas.vue'
 import { formatDate } from '../utils/date'
+import { getPhotoSrc } from '../utils/photo'
 
 defineProps({
   plants: {
@@ -59,7 +60,10 @@ defineProps({
             <div v-for="item in getPlantTimeline(plant.id).slice(0, 5)" :key="item.id" class="timeline-item">
               <time>{{ formatDate(item.date) }}</time>
               <strong>{{ item.title }}</strong>
-              <p>{{ item.detail }}</p>
+              <p>
+                {{ item.detail }}
+                <img v-if="getPhotoSrc(item.photo)" :src="getPhotoSrc(item.photo)" class="timeline-photo" alt="养护照片" />
+              </p>
             </div>
           </div>
         </article>
