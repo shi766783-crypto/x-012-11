@@ -6,17 +6,24 @@ import PlantForm from './components/PlantForm.vue'
 import PlantList from './components/PlantList.vue'
 import ProfileCenter from './components/ProfileCenter.vue'
 import RecordForms from './components/RecordForms.vue'
+import StorageNotice from './components/StorageNotice.vue'
 import WateringReminders from './components/WateringReminders.vue'
 import { useGardenStore } from './composables/useGardenStore'
 
 const {
   state,
+  storageStatus,
+  legacyPhotoCount,
   plantsWithStatus,
   dueWateringPlants,
   dashboard,
   goals,
   achievements,
   leaderboards,
+  checkPhotoRoom,
+  compressLegacyPhotos,
+  clearAllPhotos,
+  dismissStorageError,
   addPlant,
   addCareRecord,
   addGrowthRecord,
@@ -36,6 +43,14 @@ const {
       <span class="storage-note">纯前端 · 本地日期提醒 · Canvas 曲线</span>
     </header>
 
+    <StorageNotice
+      :clear-all-photos="clearAllPhotos"
+      :compress-legacy-photos="compressLegacyPhotos"
+      :dismiss-storage-error="dismissStorageError"
+      :legacy-photo-count="legacyPhotoCount"
+      :status="storageStatus"
+    />
+
     <DashboardPanel :achievements="achievements" :dashboard="dashboard" :goals="goals" />
 
     <section class="main-grid">
@@ -43,10 +58,11 @@ const {
         <WateringReminders :plants="dueWateringPlants" />
         <PlantList :plants="plantsWithStatus" />
       </div>
-      <PlantForm @submit="addPlant" />
+      <PlantForm :check-photo-room="checkPhotoRoom" @submit="addPlant" />
     </section>
 
     <RecordForms
+      :check-photo-room="checkPhotoRoom"
       :plants="state.plants"
       @care="addCareRecord"
       @growth="addGrowthRecord"
